@@ -1,0 +1,15 @@
+[
+  {
+    "text": "I need help with funnel automation"
+  },
+  {
+    "text": "Need AI automation for my business"
+  },
+  {
+    "text": "Looking for marketing lead generation"
+  },
+  {
+    "query": "Need automation for leads",
+    "top_k": 3
+  }
+]
