@@ -20,9 +20,7 @@ def store_text(text: str, record_id: int):
 def search_similar(query: str, top_k: int = 5):
     embedding = embedding_service.generate_embedding(query)
 
-    results = vector_store.search(
+    return vector_store.search(
         embedding=embedding,
         top_k=top_k
     )
-
-    return results
