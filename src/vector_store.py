@@ -5,72 +5,101 @@ from typing import List, Dict
 
 
 class VectorStore:
-    def __init__(self, dim: int = 384, path: str = "faiss.index"):
+
+    def __init__(
+        self,
+        dim: int = 384,
+        path: str = "faiss.index"
+    ):
+
         self.dim = dim
         self.path = path
 
-        self.index = faiss.IndexFlatIP(dim)
-
-        self.texts = []
-        self.ids = []
+        # Store vectors with custom IDs
+        self.index = faiss.IndexIDMap(
+            faiss.IndexFlatIP(dim)
+        )
 
         self._load()
 
-    def add_vector(self, embedding: np.ndarray, text: str, record_id: int):
+    def add_vector(
+        self,
+        embedding: np.ndarray,
+        record_id: int
+    ):
+
         embedding = embedding.reshape(1, -1)
+
+        # Normalize for cosine similarity
         faiss.normalize_L2(embedding)
 
-        self.index.add(embedding)
+        # Prevent duplicate IDs
+        existing_ids = faiss.vector_to_array(
+            self.index.id_map
+        )
 
-        self.texts.append(text)
-        self.ids.append(record_id)
+        if record_id in existing_ids:
+            return
+
+        ids = np.array(
+            [record_id],
+            dtype=np.int64
+        )
+
+        self.index.add_with_ids(
+            embedding,
+            ids
+        )
 
         self._save()
 
-    def search(self, embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
-        """
-        Returns top_k most similar results using cosine similarity (via FAISS).
-        """
+    def search(
+        self,
+        embedding: np.ndarray,
+        top_k: int = 5
+    ) -> List[Dict]:
 
         if self.index.ntotal == 0:
             return []
 
         embedding = embedding.reshape(1, -1)
+
+        # Normalize query embedding
         faiss.normalize_L2(embedding)
 
-        # Ask FAISS for more candidates to ensure enough valid results
-        search_k = min(top_k * 5, self.index.ntotal)
-
-        scores, indices = self.index.search(embedding, search_k)
+        scores, ids = self.index.search(
+            embedding,
+            top_k
+        )
 
         results = []
 
-        for score, idx in zip(scores[0], indices[0]):
-            if idx == -1:
-                continue
+        for score, record_id in zip(
+            scores[0],
+            ids[0]
+        ):
 
-            if idx >= len(self.ids):
+            if record_id == -1:
                 continue
 
             results.append({
-                "id": self.ids[idx],
-                "text": self.texts[idx],
+                "id": int(record_id),
                 "score": float(score)
             })
-
-            if len(results) == top_k:
-                break
 
         return results
 
     def _save(self):
-        faiss.write_index(self.index, self.path)
+
+        faiss.write_index(
+            self.index,
+            self.path
+        )
 
     def _load(self):
-        if os.path.exists(self.path):
-            self.index = faiss.read_index(self.path)
 
-        # safety reset if mismatch occurs
-        if len(self.texts) != len(self.ids):
-            self.texts = []
-            self.ids = []
+        if os.path.exists(self.path):
+
+            self.index = faiss.read_index(
+                self.path
+            )
