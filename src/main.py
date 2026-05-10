@@ -1,4 +1,9 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Depends,
+    BackgroundTasks
+)
 from sqlalchemy.orm import Session
 
 from src.models import StoreInput, SearchInput, SearchResponse
@@ -28,39 +33,64 @@ def health_check():
 
 
 @app.post("/store")
-def store(input_data: StoreInput, db: Session = Depends(get_db)):
+def store(
+    input_data: StoreInput,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
 
     if not input_data.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
 
-    # 1. Save in DB first
-    record = save_text(db=db, text=input_data.text)
+        raise HTTPException(
+            status_code=400,
+            detail="Text cannot be empty"
+        )
 
-    # 2. Save in vector store with SAME ID
-    store_text(
-        text=input_data.text,
-        record_id=record.id
+    # Save in database first
+    record = save_text(
+        db=db,
+        text=input_data.text
     )
 
-    return {"message": "Stored successfully", "id": record.id}
+    # Run embedding generation in background
+    background_tasks.add_task(
+        store_text,
+        input_data.text,
+        record.id
+    )
 
+    return {
+        "message": "Processing started",
+        "id": record.id
+    }
 
 @app.post("/search", response_model=SearchResponse)
-def search(input_data: SearchInput, db: Session = Depends(get_db)):
+def search(
+    input_data: SearchInput,
+    db: Session = Depends(get_db)
+):
 
     if not input_data.query.strip():
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+        raise HTTPException(
+            status_code=400,
+            detail="Query cannot be empty"
+        )
 
     results = search_similar(
+        db=db,
         query=input_data.query,
         top_k=input_data.top_k
     )
 
     if results:
+
         save_search_history(
             db=db,
             query=input_data.query,
             result=results[0]
         )
 
-    return {"results": results}
+    return {
+        "results": results
+    }
