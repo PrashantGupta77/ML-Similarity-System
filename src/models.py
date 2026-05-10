@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 
@@ -7,8 +7,14 @@ class StoreInput(BaseModel):
 
 
 class SearchInput(BaseModel):
+
     query: str
-    top_k: int = 5
+
+    top_k: int = Field(
+        default=5,
+        gt=0,
+        le=20
+    )
 
 
 class SearchResult(BaseModel):
